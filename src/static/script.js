@@ -72,7 +72,7 @@ function formatStage(stage) {
 
 function saveToLocalStorage(meetingId, data) {
   const localHistory = JSON.parse(
-    localStorage.getItem("conversionHistory") || "[]",
+    localStorage.getItem("meetingHistory") || "[]",
   );
 
   const filtered = localHistory.filter((item) => item.meeting_id !== meetingId);
@@ -87,7 +87,7 @@ function saveToLocalStorage(meetingId, data) {
 
   if (filtered.length > 20) filtered.pop();
 
-  localStorage.setItem("conversionHistory", JSON.stringify(filtered));
+  localStorage.setItem("meetingHistory", JSON.stringify(filtered));
 }
 
 async function loadHistory() {
@@ -99,7 +99,7 @@ async function loadHistory() {
     const backendHistory = await res.json();
 
     const localHistory = JSON.parse(
-      localStorage.getItem("conversionHistory") || "[]",
+      localStorage.getItem("meetingHistory") || "[]",
     );
 
     const mergedMap = new Map();
@@ -133,6 +133,20 @@ async function loadHistory() {
   }
 }
 
+// Helper function to remove an item from history
+function removeFromHistory(id) {
+    if (!confirm('آیا از حذف این آیتم اطمینان دارید؟')) {
+        return;
+    }
+
+    let history = JSON.parse(localStorage.getItem('meetingHistory') || '[]');
+    const updatedHistory = history.filter(item => item.meeting_id !== id);
+    localStorage.setItem('meetingHistory', JSON.stringify(updatedHistory));
+
+    location.reload();
+}
+
+
 function renderHistoryItem(
   job,
   container,
@@ -150,7 +164,7 @@ function renderHistoryItem(
     statusText = "خطا";
     statusClass = "error";
   } else if (isCompleted) {
-    statusText = "انجام شد";
+    statusText = "آماده";
     statusClass = "completed";
   } else if (isCurrentlyActive) {
     statusText = "در حال انجام";
@@ -158,7 +172,7 @@ function renderHistoryItem(
   } else {
     statusText = job.stage ? formatStage(job.stage) : "در صف";
     if (statusText === "نهایی‌سازی" && job.progress >= 1) {
-      statusText = "انجام شد";
+      statusText = "آماده";
       statusClass = "completed";
     }
   }
@@ -166,19 +180,24 @@ function renderHistoryItem(
   div.innerHTML = `
     <div class="history-info">
         <span class="history-id">${job.meeting_id}.mkv</span>
-        <span class="history-meta">${formatTimestamp(job.timestamp)}</span>
+        <span class="history-meta">${formatTimestamp(job.timestamp)}<span class="history-status ${statusClass}">${statusText}</span></span>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
-        <span class="history-status ${statusClass}">${statusText}</span>
-        ${isCompleted ? `<a href="/download/${job.meeting_id}" class="download" style="padding:6px 12px; font-size:12px; margin:0; background:#059669;">دانلود</a>` : ""}
+        ${isCompleted ? `<a href="/download/${job.meeting_id}" class="download">دانلود</a>` : ""}
+        <button class="btn-remove-history" data-id="${job.meeting_id}">حذف</button>
     </div>
   `;
+
+    const removeBtn = div.querySelector('.btn-remove-history');
+    removeBtn.addEventListener('click', () => {
+        removeFromHistory(job.meeting_id);
+    });
   container.appendChild(div);
 }
 
 async function checkForStaleActiveSession() {
   const localHistory = JSON.parse(
-    localStorage.getItem("conversionHistory") || "[]",
+    localStorage.getItem("meetingHistory") || "[]",
   );
   const activeLocalJob = localHistory.find(
     (item) =>

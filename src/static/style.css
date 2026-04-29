@@ -136,22 +136,42 @@ button:disabled {
 }
 
 .download {
-  margin-top: 25px;
   display: inline-block;
   text-align: center;
   background: #059669;
-  padding: 14px 28px;
+  padding: 6px 12px;
   border-radius: 10px;
   color: white;
   text-decoration: none;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 12px;
   transition: 0.2s;
   font-family: 'Sahel', sans-serif;
+  margin: 0;
 }
 
 .download:hover {
   background: #047857;
+}
+
+.btn-remove-history {
+  width: auto;
+  display: inline-block;
+  text-align: center;
+  background: #dc2626;
+  padding: 6px 12px;
+  border-radius: 10px;
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 12px;
+  transition: 0.2s;
+  font-family: 'Sahel', sans-serif;
+  margin: 0;
+}
+
+.btn-remove-history:hover {
+  background: #a11111;
 }
 
 .stage-name {
@@ -229,12 +249,15 @@ button:disabled {
   font-size: 12px;
   color: #a78bfa;
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .history-status {
   font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 1px 10px;
+  border-radius: 12px;
   background: #2e1065;
   color: #c4b5fd;
   text-transform: capitalize;
@@ -254,7 +277,7 @@ button:disabled {
 }
 
 .history-status.error {
-  background: #450a0a;
+  background: #6b0d0d;
   color: #fca5a5;
 }
 
