@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Adobe Connect Converter</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto;
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+
+      .container {
+        width: 560px;
+        background: rgba(30, 41, 59, 0.9);
+        backdrop-filter: blur(10px);
+        padding: 40px;
+        border-radius: 18px;
+        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.45);
+      }
+
+      h1 {
+        margin: 0 0 6px 0;
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        color: #94a3b8;
+        font-size: 14px;
+        margin-bottom: 25px;
+      }
+
+      input {
+        width: 100%;
+        padding: 14px;
+        border-radius: 10px;
+        border: none;
+        outline: none;
+        background: #0f172a;
+        color: white;
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+
+      button {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 10px;
+        background: #3b82f6;
+        color: white;
+        font-size: 15px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+
+      button:hover {
+        background: #2563eb;
+      }
+
+      button:disabled {
+        background: #475569;
+        cursor: not-allowed;
+      }
+
+      #status {
+        margin-top: 18px;
+        font-size: 14px;
+        color: #cbd5f5;
+        min-height: 20px;
+      }
+
+      .progress-wrapper {
+        margin-top: 20px;
+        display: none;
+      }
+
+      .stage {
+        font-size: 13px;
+        color: #94a3b8;
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 14px;
+        background: #0f172a;
+        border-radius: 20px;
+        overflow: hidden;
+      }
+
+      .progress {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        transition: width 0.35s ease;
+      }
+
+      .download {
+        margin-top: 25px;
+        display: block;
+        text-align: center;
+        background: #22c55e;
+        padding: 14px;
+        border-radius: 10px;
+        color: white;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 15px;
+        transition: 0.2s;
+      }
+
+      .download:hover {
+        background: #16a34a;
+      }
+
+      .stage-name {
+        text-transform: capitalize;
+      }
+
+      .percent {
+        font-weight: 600;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>Adobe Connect Converter</h1>
+
+      <div class="subtitle">
+        Paste your meeting link to download and convert it.
+      </div>
+
+      <input id="url" placeholder="https://your-connect-server/..." />
+
+      <button id="btn" onclick="convertMeeting()">Convert Meeting</button>
+
+      <div id="status"></div>
+
+      <div class="progress-wrapper" id="progressBox">
+        <div class="stage">
+          <span class="stage-name" id="stageName">Preparing</span>
+          <span class="percent" id="percent">0%</span>
+        </div>
+
+        <div class="progress-bar">
+          <div class="progress" id="progress"></div>
+        </div>
+      </div>
+
+      <div id="result"></div>
+    </div>
+
+    <script>
+      let currentStage = null;
+
+      function formatStage(stage) {
+        if (!stage) return "";
+
+        return stage.replace("ffmpeg_", "ffmpeg ").replace("_", " ");
+      }
+
+      async function convertMeeting() {
+        const url = document.getElementById("url").value.trim();
+        const status = document.getElementById("status");
+        const result = document.getElementById("result");
+        const btn = document.getElementById("btn");
+        const progressBox = document.getElementById("progressBox");
+
+        if (!url) {
+          status.innerText = "Please paste a meeting link.";
+          return;
+        }
+
+        btn.disabled = true;
+        result.innerHTML = "";
+        status.innerText = "Starting conversion...";
+
+        try {
+          const response = await fetch(
+            `/convert?meeting_url=${encodeURIComponent(url)}`,
+            {
+              method: "POST",
+            },
+          );
+
+          const data = await response.json();
+
+          if (data.status !== "success") {
+            status.innerText = "Conversion failed.";
+            btn.disabled = false;
+            return;
+          }
+
+          progressBox.style.display = "block";
+
+          startProgressPolling(data.progress_url, data.download_url);
+        } catch (err) {
+          status.innerText = "Error: " + err;
+          btn.disabled = false;
+        }
+      }
+
+      function updateProgress(stage, progress, message) {
+        const bar = document.getElementById("progress");
+        const percent = document.getElementById("percent");
+        const stageName = document.getElementById("stageName");
+        const status = document.getElementById("status");
+
+        if (stage !== currentStage) {
+          bar.style.width = "0%";
+          percent.innerText = "0%";
+          currentStage = stage;
+        }
+
+        const p = Math.floor(progress * 100);
+
+        bar.style.width = p + "%";
+        percent.innerText = p + "%";
+
+        stageName.innerText = formatStage(stage);
+
+        status.innerText = message;
+      }
+
+      function startProgressPolling(progressUrl, downloadUrl) {
+        const result = document.getElementById("result");
+        const btn = document.getElementById("btn");
+
+        const timer = setInterval(async () => {
+          try {
+            const res = await fetch(progressUrl);
+            const data = await res.json();
+
+            if (!data.stage) return;
+
+            updateProgress(data.stage, data.progress, data.message);
+
+            if (data.stage === "finalize" && data.progress >= 1) {
+              clearInterval(timer);
+
+              document.getElementById("status").innerText =
+                "Conversion finished ✅";
+
+              result.innerHTML = `<a class="download" href="${downloadUrl}">Download Video</a>`;
+
+              btn.disabled = false;
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        }, 1000);
+      }
+    </script>
+  </body>
+</html>

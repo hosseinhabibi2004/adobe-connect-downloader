@@ -1,0 +1,68 @@
+[project]
+name = "tabrizu-adobe-connect-downloader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "dateparser>=1.4.0",
+    "fastapi[standard]>=0.136.1",
+    "ffmpeg-python>=0.2.0",
+    "requests>=2.33.1",
+    "xmltodict>=1.0.4",
+]
+
+[dependency-groups]
+dev = ["pre-commit>=4.5.1", "ruff>=0.15.10"]
+lint = ["pre-commit>=4.5.1", "ruff>=0.15.10"]
+prod = ["uvicorn>=0.46.0"]
+
+[tool.ruff]
+exclude = ["*/migrations"]
+line-length = 88
+output-format = "concise"
+target-version = "py314"
+
+[tool.ruff.lint]
+
+extend-select = ["ALL"]
+ignore = [
+    # missing-trailing-comma
+    "COM812",
+    # flake8-copyright
+    "CPY",
+    # flake8-fixme
+    "FIX",
+    # pydoclint
+    "DOC",
+    # pydocstyle
+    "D",
+    # ambiguous unicode (e.g., Arabic Heh)
+    "RUF001",
+]
+
+[tool.ruff.lint.pydoclint]
+ignore-one-line-docstrings = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+force-wrap-aliases = true
+combine-as-imports = true
+lines-after-imports = 2
+relative-imports-order = "closest-to-furthest"
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+split-on-trailing-comma = false
+
+[tool.ruff.format]
+indent-style = "space"
+docstring-code-format = true
+skip-magic-trailing-comma = false
+line-ending = "auto"
