@@ -20,12 +20,14 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 100vh;
+        min-height: 100vh;
         margin: 0;
+        padding: 20px;
       }
 
       .container {
-        width: 560px;
+        width: 100%;
+        max-width: 600px;
         background: rgba(30, 41, 59, 0.9);
         backdrop-filter: blur(10px);
         padding: 40px;
@@ -115,10 +117,10 @@
 
       .download {
         margin-top: 25px;
-        display: block;
+        display: inline-block;
         text-align: center;
         background: #22c55e;
-        padding: 14px;
+        padding: 14px 28px;
         border-radius: 10px;
         color: white;
         text-decoration: none;
@@ -137,6 +139,93 @@
 
       .percent {
         font-weight: 600;
+      }
+
+      .history-section {
+        margin-top: 30px;
+        border-top: 1px solid #334155;
+        padding-top: 20px;
+      }
+
+      .history-title {
+        font-size: 18px;
+        margin-bottom: 15px;
+        color: #94a3b8;
+      }
+
+      .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .history-item {
+        background: #1e293b;
+        padding: 12px;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+        border: 1px solid #334155;
+        transition: 0.2s;
+      }
+
+      .history-item:hover {
+        border-color: #475569;
+      }
+
+      .history-info {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .history-id {
+        font-weight: 600;
+        color: #e2e8f0;
+      }
+
+      .history-meta {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 2px;
+      }
+
+      .history-status {
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: #334155;
+        color: #94a3b8;
+        text-transform: capitalize;
+      }
+
+      .history-status.completed {
+        background: #064e3b;
+        color: #6ee7b7;
+      }
+
+      .history-status.processing {
+        background: #1e3a8a;
+        color: #93c5fd;
+        animation: pulse 2s infinite;
+      }
+
+      .history-status.error {
+        background: #450a0a;
+        color: #fca5a5;
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+        100% {
+          opacity: 1;
+        }
       }
     </style>
   </head>
@@ -167,15 +256,194 @@
       </div>
 
       <div id="result"></div>
+
+      <div class="history-section">
+        <div class="history-title">Recent Conversions</div>
+        <div id="historyList" class="history-list">
+          <!-- History items will be injected here -->
+        </div>
+      </div>
     </div>
 
     <script>
-      let currentStage = null;
+      let currentEventSource = null;
+      let activeMeetingId = null;
+
+      document.addEventListener("DOMContentLoaded", () => {
+        loadHistory();
+
+        // Check if we had an active session in localStorage that wasn't completed
+        checkForStaleActiveSession();
+      });
+
+      function formatTimestamp(isoString) {
+        if (!isoString) return "";
+        const date = new Date(isoString);
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
 
       function formatStage(stage) {
         if (!stage) return "";
+        return stage
+          .replace("ffmpeg_", "ffmpeg ")
+          .replace("_", " ")
+          .replace("error", "Error")
+          .replace("finalize", "Finalizing");
+      }
 
-        return stage.replace("ffmpeg_", "ffmpeg ").replace("_", " ");
+      function saveToLocalStorage(meetingId, data) {
+        const localHistory = JSON.parse(
+          localStorage.getItem("conversionHistory") || "[]",
+        );
+
+        // Remove existing entry for this ID if any
+        const filtered = localHistory.filter(
+          (item) => item.meeting_id !== meetingId,
+        );
+
+        // Add new entry
+        filtered.unshift({
+          meeting_id: meetingId,
+          stage: data.stage,
+          progress: data.progress,
+          message: data.message,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Keep only last 20
+        if (filtered.length > 20) filtered.pop();
+
+        localStorage.setItem("conversionHistory", JSON.stringify(filtered));
+
+        // If this is the currently active session (matches what we might be polling), update it
+        if (meetingId === activeMeetingId) {
+          // Optional: Update UI directly if we weren't using SSE for this specific one
+        }
+      }
+
+      async function loadHistory() {
+        const historyList = document.getElementById("historyList");
+        historyList.innerHTML = "";
+
+        try {
+          // 1. Fetch fresh history from backend (Redis)
+          const res = await fetch("/history");
+          const backendHistory = await res.json();
+
+          // 2. Get cached history from local storage
+          const localHistory = JSON.parse(
+            localStorage.getItem("conversionHistory") || "[]",
+          );
+
+          // 3. Merge them. Backend takes precedence if IDs match.
+          const mergedMap = new Map();
+
+          // Add local history first
+          localHistory.forEach((item) =>
+            mergedMap.set(item.meeting_id, { ...item, source: "local" }),
+          );
+
+          // Overwrite with backend history if exists
+          backendHistory.forEach((item) => {
+            mergedMap.set(item.meeting_id, { ...item, source: "backend" });
+          });
+
+          // Convert back to array and sort by timestamp (latest first)
+          const allHistory = Array.from(mergedMap.values())
+            .filter((item) => item.timestamp) // Only show items with timestamps
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+          // 4. Render
+          if (allHistory.length === 0) {
+            historyList.innerHTML =
+              '<div style="color:#64748b; font-size:14px;">No recent conversions.</div>';
+            return;
+          }
+
+          allHistory.forEach((job) => {
+            const isCompleted = job.stage === "finalize" && job.progress >= 1;
+            const isError = job.stage === "error";
+
+            // Check if this job is currently being tracked by the UI
+            const isActive = job.meeting_id === activeMeetingId;
+
+            renderHistoryItem(job, historyList, isActive, isCompleted, isError);
+          });
+        } catch (err) {
+          console.error("Failed to load history", err);
+        }
+      }
+
+      function renderHistoryItem(
+        job,
+        container,
+        isCurrentlyActive,
+        isCompleted,
+        isError,
+      ) {
+        const div = document.createElement("div");
+        div.className = "history-item";
+
+        let statusText = "Unknown";
+        let statusClass = "";
+
+        if (isError) {
+          statusText = "Error";
+          statusClass = "error";
+        } else if (isCompleted) {
+          statusText = "Completed";
+          statusClass = "completed";
+        } else if (isCurrentlyActive) {
+          statusText = "Processing";
+          statusClass = "processing";
+        } else {
+          // For items in history that are old/inactive
+          statusText = job.stage || "Queued";
+          if (statusText === "finalize" && job.progress >= 1) {
+            statusText = "Completed";
+            statusClass = "completed";
+          } else {
+            statusClass = "";
+          }
+        }
+
+        div.innerHTML = `
+            <div class="history-info">
+                <span class="history-id">${job.meeting_id}.mkv</span>
+                <span class="history-meta">${formatTimestamp(job.timestamp)} • ${formatStage(job.stage)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                ${isCompleted ? `<a href="/download/${job.meeting_id}" class="download" style="padding:6px 12px; font-size:12px; margin:0;">Download</a>` : ""}
+                <span class="history-status ${statusClass}">${statusText}</span>
+            </div>
+        `;
+        container.appendChild(div);
+      }
+
+      async function checkForStaleActiveSession() {
+        // Check local storage for an active session that might have been interrupted
+        // We look for items that are NOT completed and NOT error
+        const localHistory = JSON.parse(
+          localStorage.getItem("conversionHistory") || "[]",
+        );
+        const activeLocalJob = localHistory.find(
+          (item) =>
+            item.stage !== "finalize" &&
+            item.stage !== "error" &&
+            item.stage !== null,
+        );
+
+        if (activeLocalJob) {
+          console.log(
+            "Found stale active job in local storage:",
+            activeLocalJob.meeting_id,
+          );
+          // We try to connect to this job via SSE
+          connectToSSE(activeLocalJob.meeting_id);
+        }
       }
 
       async function convertMeeting() {
@@ -190,9 +458,19 @@
           return;
         }
 
-        btn.disabled = true;
+        // Clear previous state
         result.innerHTML = "";
+        progressBox.style.display = "none";
+
+        // Disconnect any existing SSE
+        if (currentEventSource) {
+          currentEventSource.close();
+          currentEventSource = null;
+        }
+
+        btn.disabled = true;
         status.innerText = "Starting conversion...";
+        activeMeetingId = null;
 
         try {
           const response = await fetch(
@@ -211,63 +489,111 @@
           }
 
           progressBox.style.display = "block";
+          activeMeetingId = data.download_url.split("/").pop(); // Extract ID from download URL
 
-          startProgressPolling(data.progress_url, data.download_url);
+          if (data.existing) {
+            status.innerText = "Resuming existing conversion...";
+          } else {
+            status.innerText = "Conversion started...";
+          }
+
+          // Start SSE connection for real-time updates
+          connectToSSE(activeMeetingId, data.sse_url);
         } catch (err) {
           status.innerText = "Error: " + err;
           btn.disabled = false;
         }
       }
 
-      function updateProgress(stage, progress, message) {
+      function connectToSSE(meetingId, sseEndpoint) {
+        if (!sseEndpoint) {
+          sseEndpoint = `/sse/${meetingId}`;
+        }
+
+        // If we already have an active connection for this ID, don't create another
+        if (currentEventSource && currentEventSource.url === sseEndpoint) {
+          return;
+        }
+
+        // Close previous if any
+        if (currentEventSource) {
+          currentEventSource.close();
+        }
+
+        const eventSource = new EventSource(sseEndpoint);
+        currentEventSource = eventSource;
+
+        eventSource.onmessage = function (event) {
+          try {
+            const data = JSON.parse(event.data);
+            updateUI(data, meetingId);
+          } catch (e) {
+            console.error("Failed to parse SSE data:", e);
+          }
+        };
+
+        eventSource.onerror = function (err) {
+          console.error("SSE Error:", err);
+          eventSource.close();
+          currentEventSource = null;
+          document.getElementById("status").innerText =
+            "Connection lost. Refresh to see final status.";
+          document.getElementById("btn").disabled = false;
+        };
+      }
+
+      function updateUI(data, meetingId) {
         const bar = document.getElementById("progress");
         const percent = document.getElementById("percent");
         const stageName = document.getElementById("stageName");
         const status = document.getElementById("status");
-
-        if (stage !== currentStage) {
-          bar.style.width = "0%";
-          percent.innerText = "0%";
-          currentStage = stage;
-        }
-
-        const p = Math.floor(progress * 100);
-
-        bar.style.width = p + "%";
-        percent.innerText = p + "%";
-
-        stageName.innerText = formatStage(stage);
-
-        status.innerText = message;
-      }
-
-      function startProgressPolling(progressUrl, downloadUrl) {
         const result = document.getElementById("result");
         const btn = document.getElementById("btn");
+        const progressBox = document.getElementById("progressBox");
 
-        const timer = setInterval(async () => {
-          try {
-            const res = await fetch(progressUrl);
-            const data = await res.json();
+        // Save to local storage continuously
+        saveToLocalStorage(meetingId, data);
 
-            if (!data.stage) return;
+        // Update Progress Bar UI
+        if (progressBox.style.display === "block") {
+          bar.style.width = data.progress * 100 + "%";
+          percent.innerText = Math.floor(data.progress * 100) + "%";
+          stageName.innerText = formatStage(data.stage);
+          status.innerText = data.message;
+        }
 
-            updateProgress(data.stage, data.progress, data.message);
-
-            if (data.stage === "finalize" && data.progress >= 1) {
-              clearInterval(timer);
-
-              document.getElementById("status").innerText =
-                "Conversion finished ✅";
-
-              result.innerHTML = `<a class="download" href="${downloadUrl}">Download Video</a>`;
-
-              btn.disabled = false;
-            }
-          } catch (err) {
-            console.error(err);
+        // Handle Completion or Error
+        if (
+          (data.stage === "finalize" && data.progress >= 1) ||
+          data.stage === "error"
+        ) {
+          if (currentEventSource) {
+            currentEventSource.close();
+            currentEventSource = null;
           }
-        }, 1000);
+
+          activeMeetingId = null;
+
+          if (data.stage === "error") {
+            // Handle Error State
+            status.innerText = `Conversion Failed: ${data.message}`;
+            btn.disabled = false; // Re-enable button to allow retry or new conversion
+            // Optionally log to console for debugging if needed
+            console.error(`Job ${meetingId} failed: ${data.message}`);
+          } else {
+            // Handle Completion State
+            status.innerText = "Conversion finished ✅";
+
+            // Show Download Button
+            if (result.innerHTML === "") {
+              result.innerHTML = `<a class="download" href="/download/${meetingId}">Download Video</a>`;
+            }
+            btn.disabled = false;
+          }
+
+          // Refresh history list to update statuses
+          loadHistory();
+        }
       }
     </script>
   </body>
