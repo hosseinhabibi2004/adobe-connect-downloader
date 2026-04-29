@@ -30,6 +30,7 @@ try:
         host=config.REDIS_HOST,
         port=config.REDIS_PORT,
         db=config.REDIS_DB,
+        password=config.REDIS_PASSWORD,
         decode_responses=True,
     )
     redis_client.ping()

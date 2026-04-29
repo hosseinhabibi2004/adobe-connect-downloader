@@ -1,0 +1,27 @@
+services:
+  fastapi:
+    build:
+      context: .
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/src
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6.2-alpine
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "6378:6379"
+    command: redis-server --save 20 1 --loglevel warning --requirepass $REDIS_PASSWORD
+    volumes:
+      - redis:/data
+
+volumes:
+  redis:
+    driver: local
