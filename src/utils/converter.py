@@ -10,7 +10,6 @@ from src.utils.stitcher.stitch_content import stitch
 if TYPE_CHECKING:
     from pathlib import Path
 
-
 def convert_meeting(
     meeting_id: str, callback: callable[[str, float, str], None] | None = None
 ) -> Path:
@@ -18,35 +17,36 @@ def convert_meeting(
     meeting_dir = TEMP_DIR / meeting_id
 
     if callback:
-        callback("extract", 0.0, "Extracting meeting archive")
+        callback("extract", 0.0, "در حال استخراج آرشیو جلسه...")
 
     if not meeting_dir.exists():
         with zipfile.ZipFile(zip_path) as z:
             z.extractall(meeting_dir)
 
     if callback:
-        callback("extract", 1.0, "Extraction complete")
+        callback("extract", 1.0, "استخراج کامل شد.")
 
     if callback:
-        callback("parse", 0.0, "Parsing meeting media")
+        callback("parse", 0.0, "در حال پردازش مدیاهای جلسه...")
 
     all_content = get_all_content(meeting_dir)
 
     if callback:
-        callback("parse", 1.0, "Media parsing complete")
+        callback("parse", 1.0, "پردازش مدیا کامل شد.")
 
     final_video = stitch(all_content, meeting_dir, callback)
 
     if callback:
-        callback("finalize", 0.0, "Finalizing output")
+        callback("finalize", 0.0, "در حال نهایی‌سازی خروجی...")
 
     final_path = OUTPUT_DIR / f"{meeting_id}.mkv"
 
     final_video.rename(final_path)
 
-    # shutil.rmtree(meeting_dir)
+    shutil.rmtree(meeting_dir)
+    zip_path.unlink(missing_ok=True)
 
     if callback:
-        callback("finalize", 1.0, "Conversion complete")
+        callback("finalize", 1.0, "تبدیل کامل شد.")
 
     return final_path

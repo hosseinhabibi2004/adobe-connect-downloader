@@ -68,7 +68,7 @@ def generate_empty_video(
 
     if not file_name.exists():
         if callback:
-            callback("ffmpeg_blank", 0.0, "Generating blank video segment")
+            callback("ffmpeg_blank", 0.0, "در حال ایجاد ویدیوی خالی اولیه...")
 
         cmd = [
             "ffmpeg",
@@ -94,7 +94,7 @@ def generate_empty_video(
         )
 
         if callback:
-            callback("ffmpeg_blank", 1.0, "Blank video ready")
+            callback("ffmpeg_blank", 1.0, "ویدیوی خالی آماده شد")
 
     return file_name
 
@@ -160,7 +160,7 @@ def concat_videos(
 
     if not concat_output.exists():
         if callback:
-            callback("ffmpeg_concat", 0.0, "Concatenating video segments")
+            callback("ffmpeg_concat", 0.0, "در حال پیوند قطعات ویدیویی...")
 
         cmd = [
             "ffmpeg",
@@ -179,7 +179,7 @@ def concat_videos(
         subprocess.run(cmd)  # noqa: PLW1510, S603
 
         if callback:
-            callback("ffmpeg_concat", 1.0, "Video concatenation complete")
+            callback("ffmpeg_concat", 1.0, "پیوند ویدیوها کامل شد.")
 
     return concat_output
 
@@ -264,11 +264,11 @@ def stitch(
     ]
 
     if callback:
-        callback("ffmpeg_mux", 0.0, "Muxing final video")
+        callback("ffmpeg_mux", 0.0, "در حال ترکیب نهایی ویدیو...")
 
     subprocess.run(cmd)  # noqa: PLW1510, S603
 
     if callback:
-        callback("ffmpeg_mux", 1.0, "Muxing complete")
+        callback("ffmpeg_mux", 1.0, "ترکیب نهایی کامل شد.")
 
     return final_output

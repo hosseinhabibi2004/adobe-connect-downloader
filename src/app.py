@@ -11,6 +11,7 @@ import redis
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from src import config
 from src.utils.converter import convert_meeting
@@ -37,6 +38,11 @@ except redis.ConnectionError as exc:
     raise RuntimeError(msg) from exc
 
 app = FastAPI()
+
+# Mount static files (CSS/JS)
+app.mount(
+    "/static", StaticFiles(directory=str(config.BASE_DIR / "static")), name="static"
+)
 
 
 def get_job_key(job_id: str) -> str:
@@ -104,20 +110,13 @@ def build_download_link(meeting_url: str) -> tuple[str, str]:
     parsed = urlparse(meeting_url)
     query = parse_qs(parsed.query)
 
-    if "session" not in query:
-        msg = "Session not found in URL"
-        raise ValueError(msg)
-
-    session_id = query["session"][0]
-
     base_path = parsed.path.rstrip("/")
-
     meeting_id = base_path.split("/")[-1]
-    download_url = (
-        f"{parsed.scheme}://{parsed.netloc}"
-        f"{base_path}/output/{meeting_id}.zip"
-        f"?download=zip&session={session_id}"
-    )
+    download_url = f"{parsed.scheme}://{parsed.netloc}{base_path}/output/{meeting_id}.zip?download=zip"
+
+    if "session" in query:
+        session_id = query["session"][0]
+        download_url += f"&session={session_id}"
 
     return download_url, meeting_id
 
@@ -136,10 +135,10 @@ def download_zip(
     content_type = response.headers.get("content-type", "")
     if "zip" not in content_type and "application/zip" not in content_type:
         if "You do not have permission to access this item." in response.text:
-            msg = "You do not have permission to access this item."
+            msg = "شما دسترسی لازم برای دانلود این جلسه را ندارید."
             raise PermissionError(msg)
 
-        msg = f"Expected ZIP file, but received: {content_type}"
+        msg = "مشکلی در دانلود پیش آمده است. لطفاً لینک خود را بررسی نمایید."
         raise ValueError(msg)
 
     total_size = int(response.headers.get("content-length", 0))
@@ -152,9 +151,9 @@ def download_zip(
 
                 progress = downloaded / total_size if total_size else 0
 
-                callback("download", progress, "Downloading meeting archive")
+                callback("download", progress, "در حال دانلود جلسه...")
 
-    callback("download", 1.0, "Download complete")
+    callback("download", 1.0, "دانلود به اتمام رسید.")
 
     return path
 
@@ -210,7 +209,7 @@ def download_file(meeting_id: str) -> FileResponse:
     file_path = config.OUTPUT_DIR / f"{meeting_id}.mkv"
 
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="فایل یافت نشد.")
 
     return FileResponse(
         file_path,
